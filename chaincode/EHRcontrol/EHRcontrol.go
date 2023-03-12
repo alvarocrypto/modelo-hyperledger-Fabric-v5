@@ -1,84 +1,75 @@
 package main
 
-/* Imports
- * 4 utility libraries for formatting, handling bytes, reading and writing JSON, and string manipulation
- * 2 specific Hyperledger Fabric specific libraries for Smart Contracts
- */
 import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/hyperledger/fabric-chaincode-go/shim"
-	sc "github.com/hyperledger/fabric/protos/peer"
+	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-// Define the Smart Contract structure
+// SmartContract provides functions for control the food
 type SmartContract struct {
+	contractapi.Contract
 }
 
-// Define the car structure, with 4 properties.  Structure tags are used by encoding/json library
-type Rate struct {
-	Deal  string `json:"deal"`
-	Price string `json:"price"`
+//Food describes basic details of what makes up a food
+type Food struct {
+	Farmer  string `json:"farmer"`
+	Variety string `json:"variety"`
 }
 
-/*
- * The Init method is called when the Smart Contract "fabcar" is instantiated by the blockchain network
- * Best practice is to have any Ledger initialization in separate function -- see initLedger()
- */
-func (s *SmartContract) Init(APIstub shim.ChaincodeStubInterface) sc.Response {
-	return shim.Success(nil)
-}
+func (s *SmartContract) Set(ctx contractapi.TransactionContextInterface, foodId string, farmer string, variety string) error {
 
-/*
- * The Invoke method is called as a result of an application request to run the Smart Contract "fabcar"
- * The calling application program has also specified the particular smart contract function to be called, with arguments
- */
-func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response {
+	//Validaciones de sintaxis
 
-	// Retrieve the requested Smart Contract function and arguments
-	function, args := APIstub.GetFunctionAndParameters()
-	// Route to the appropriate handler function to interact with the ledger appropriately
-	if function == "queryRate" {
-		return s.queryRate(APIstub, args)
-	} else if function == "createRate" {
-		return s.createRate(APIstub, args)
+	//validaciones de negocio
+
+	food := Food{
+		Farmer:  farmer,
+		Variety: variety,
 	}
 
-	return shim.Error("Invalid Smart Contract function name.")
-}
-
-func (s *SmartContract) queryRate(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
-
-	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting 1")
+	foodAsBytes, err := json.Marshal(food)
+	if err != nil {
+		fmt.Printf("Marshal error: %s", err.Error())
+		return err
 	}
 
-	carAsBytes, _ := APIstub.GetState(args[0])
-	return shim.Success(carAsBytes)
+	return ctx.GetStub().PutState(foodId, foodAsBytes)
 }
 
-func (s *SmartContract) createRate(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
+func (s *SmartContract) Query(ctx contractapi.TransactionContextInterface, foodId string) (*Food, error) {
 
-	if len(args) != 3 {
-		return shim.Error("Incorrect number of arguments. Expecting 3")
+	foodAsBytes, err := ctx.GetStub().GetState(foodId)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
 	}
 
-	var rate = Rate{Deal: args[1], Price: args[2]}
+	if foodAsBytes == nil {
+		return nil, fmt.Errorf("%s does not exist", foodId)
+	}
 
-	carAsBytes, _ := json.Marshal(rate)
-	APIstub.PutState(args[0], carAsBytes)
-	fmt.Println("new Rate has been created")
-	APIstub.SetEvent("rate_created", carAsBytes)
-	return shim.Success(nil)
+	food := new(Food)
+
+	err = json.Unmarshal(foodAsBytes, food)
+	if err != nil {
+		return nil, fmt.Errorf("Unmarshal error. %s", err.Error())
+	}
+
+	return food, nil
 }
 
-// The main function is only relevant in unit test mode. Only included here for completeness.
 func main() {
 
-	// Create a new Smart Contract
-	err := shim.Start(new(SmartContract))
+	chaincode, err := contractapi.NewChaincode(new(SmartContract))
+
 	if err != nil {
-		fmt.Printf("Error creating new Smart Contract: %s", err)
+		fmt.Printf("Error create foodcontrol chaincode: %s", err.Error())
+		return
+	}
+
+	if err := chaincode.Start(); err != nil {
+		fmt.Printf("Error starting foodcontrol chaincode: %s", err.Error())
 	}
 }
