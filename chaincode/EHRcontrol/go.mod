@@ -1,4 +1,4 @@
-//module github.com/alvarocrypto/modelo-hyperledger-Fabric-v5/chaincode/EHRcontrol
+module github.com/alvarocrypto/modelo-hyperledger-Fabric-v5/chaincode/EHRcontrol
 
 go 1.13
 
